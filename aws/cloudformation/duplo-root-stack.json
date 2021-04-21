@@ -1,0 +1,172 @@
+{
+	"AWSTemplateFormatVersion": "2010-09-09",
+	"Metadata": {
+		"AWS::CloudFormation::Interface": {
+			"ParameterGroups": [
+				{
+					"Label": "VPC",
+					"Parameters": [
+						"ClassB"
+					]
+				},
+				{
+					"Label": "Resources",
+					"Parameters": [
+						"SetupUrl",
+						"MasterAmiId",
+						"BASTIONPEMKEYNAME",
+						"DUPLOEXTDNSPRFX",
+						"DUPLOINTDNSPRFX",
+						"AWSROUTE53DOMAINID"
+					]
+				}
+			]
+		}
+	},
+	"Parameters": {
+		"ClassB": {
+			"Type": "Number",
+			"Description": "Class B of VPC (10.XXX.0.0/16)",
+			"Default": 0,
+			"MinValue": 0,
+			"MaxValue": 255,
+			"ConstraintDescription": "Must be in the range [0-255]"
+		},
+		"DefaultAdmin": {
+			"Type": "String",
+			"Description": "provide the email id of the default admin to login to portal.",
+			"Default": "venkat@duplocloud.net"
+		},
+		"SetupUrl": {
+			"Type": "String",
+			"Description": "Url of the final setup like https://foobar.trials.duplocloud.net"
+		},
+		"MasterAmiId": {
+			"Type": "String",
+			"Description": "Provide the AMI-ID",
+			"Default": "ami-04119126f83f92826"
+		},
+		"BASTIONPEMKEYNAME": {
+			"Type": "String",
+			"Description": "This Key will be applied to bastion VM",
+			"Default": "msp2-bastion"
+		},
+		"DUPLOEXTDNSPRFX": {
+			"Type": "String",
+			"Description": "External DNS domain prefix for example .mypublicdomain.com",
+			"Default": ".loancraft-apps.duplocloud.net"
+		},
+		"DUPLOINTDNSPRFX": {
+			"Type": "String",
+			"Description": "Internal DNS domain prefix for example .myinternaldomain.com Internal and public can be the same",
+			"Default": ".loancraft-apps.duplocloud.net"
+		},
+		"AWSROUTE53DOMAINID": {
+			"Type": "String",
+			"Description": "Route53 domain ID for the above DNS Domain",
+			"Default": "Z09472971QOR326SM1IBP"
+		},
+		"ENABLEAUDITOR": {
+			"Type": "String",
+			"Description": "Do you want Auditor to be enabled?",
+			"Default": "YES",
+			"AllowedValues": [
+				"YES",
+				"NO"
+			]
+		}
+	},
+	"Resources": {
+		"duploVpcNetwork": {
+			"Type": "AWS::CloudFormation::Stack",
+			"Properties": {
+				"TemplateURL": "https://backups-duplo-011071455608.s3-us-west-2.amazonaws.com/duplo-vpc-network.yaml",
+				"Parameters": {
+					"ClassB": {
+						"Ref": "ClassB"
+					}
+				}
+			}
+		},
+		"duploVpcNat": {
+			"Type": "AWS::CloudFormation::Stack",
+			"Properties": {
+				"TemplateURL": "https://backups-duplo-011071455608.s3-us-west-2.amazonaws.com/duplo-vpc-nat.yaml",
+				"Parameters": {
+					"ParentVPCStack": {
+						"Fn::Select": [
+							"1",
+							{
+								"Fn::Split": [
+									"/",
+									{
+										"Ref": "duploVpcNetwork"
+									}
+								]
+							}
+						]
+					}
+				}
+			}
+		},
+		"duploVpcResources": {
+			"Type": "AWS::CloudFormation::Stack",
+			"Properties": {
+				"TemplateURL": "https://backups-duplo-011071455608.s3-us-west-2.amazonaws.com/duplo-vpc-resources-all-minimalist.json",
+				"Parameters": {
+					"ParentVPCStack": {
+						"Fn::Select": [
+							"1",
+							{
+								"Fn::Split": [
+									"/",
+									{
+										"Ref": "duploVpcNetwork"
+									}
+								]
+							}
+						]
+					},
+					"SetupUrl": {
+						"Ref": "SetupUrl"
+					},
+					"MasterAmiId": {
+						"Ref": "MasterAmiId"
+					},
+					"BASTIONPEMKEYNAME": {
+						"Ref": "BASTIONPEMKEYNAME"
+					},
+					"DUPLOEXTDNSPRFX": {
+						"Ref": "DUPLOEXTDNSPRFX"
+					},
+					"DUPLOINTDNSPRFX": {
+						"Ref": "DUPLOINTDNSPRFX"
+					},
+					"AWSROUTE53DOMAINID": {
+						"Ref": "AWSROUTE53DOMAINID"
+					}
+				}
+			}
+		},
+		"duplo-auditor-waf": {
+			"Type": "AWS::CloudFormation::Stack",
+			"Properties": {
+				"TemplateURL": "https://backups-duplo-011071455608.s3-us-west-2.amazonaws.com/duplo-vpc-nat.yaml",
+				"Parameters": {
+					"SubnetID": {
+						"Fn::GetAtt": [
+							"duploVpcNetwork",
+							"Outputs.SubnetBPrivate"
+						]
+					},
+					"VPCID": {
+						"Fn::GetAtt": [
+							"duploVpcNetwork",
+							"Outputs.VPC"
+						]
+					}
+				}
+			}
+		}
+	}
+}

@@ -1,0 +1,791 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Parameters" : {
+	  "ParentVPCStack" : {
+		"Type" : "String",
+		"Description" : "Stack name of parent VPC stack based on vpc/vpc-*azs.yaml template."
+	  },
+      "SetupUrl" : {
+      "Type" : "String",
+      "Description" : "Url of the final setup like https://foobar.trials.duplocloud.net"
+      },
+    "MasterAmiId": {
+      "Type": "String",
+      "Description": "Provide the AMI-ID",
+      "Default": "ami-0231c556fa33367ea"
+    },
+	  "BASTIONPEMKEYNAME" : {
+		"Type" : "String",
+		"Description" : "This Key will be applied to bastion VM"
+	  },
+	  "DUPLOEXTDNSPRFX" : {
+		"Type" : "String",
+		"Description" : "External DNS domain prefix for example .mypublicdomain.com",
+		"Default" : ""
+	  },
+	  "DUPLOINTDNSPRFX" : {
+		"Type" : "String",
+		"Description" : "Internal DNS domain prefix for example .myinternaldomain.com Internal and public can be the same",
+	    "Default" : "" 
+	  },
+	  "AWSROUTE53DOMAINID" : {
+		"Type" : "String",
+		"Description" : "Route53 domain ID for the above DNS Domain",
+		"Default" : ""
+	  },
+	  "DOCKERREGISTRYCLIENTKEY" : {
+		"Type" : "String",
+		"Description" : "Route53 domain ID for the above DNS Domain",
+		"Default" : ""
+	  }
+  },
+  "Resources": {
+    "tableDuploDistributedLocks": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+	    "TableName" : "DuploDistributedLocks",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "Name",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "Name",
+            "KeyType": "HASH"
+          }
+        ],
+        "ProvisionedThroughput": {
+          "ReadCapacityUnits": "5",
+          "WriteCapacityUnits": "5"
+        }
+      }
+    },
+    "s3duplokatkitdb": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "AccessControl": "Private",
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "VersioningConfiguration": {
+          "Status": "Suspended"
+        }
+      }
+    },
+	"s3duplokatkitdbSSLPolocy": {
+	  "Type" : "AWS::S3::BucketPolicy",
+	  "Properties" : {
+		  "Bucket" : {
+			  "Ref": "s3duplokatkitdb"
+			},
+		  "PolicyDocument" : {
+			"Id": "ExamplePolicy",
+			"Version": "2012-10-17",
+			"Statement": [
+				{
+					"Sid": "AllowSSLRequestsOnly",
+					"Action": "s3:*",
+					"Effect": "Deny",
+					"Resource": [
+						{
+						  "Fn::Join": [
+							"",
+							[
+							  "arn:aws:s3:::",
+							  { "Ref": "s3duplokatkitdb" }
+							]
+						  ]
+						},
+						{
+						  "Fn::Join": [
+							"",
+							[
+							  "arn:aws:s3:::",
+							  { "Ref": "s3duplokatkitdb" },
+							  "/*"
+							]
+						  ]
+						}
+					],
+					"Condition": {
+						"Bool": {
+							 "aws:SecureTransport": "false"
+						}
+					},
+				   "Principal": "*"
+				}
+			]
+		}
+		}
+	},
+    "s3duplokatkitzbuilderstore": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "AccessControl": "Private",
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "VersioningConfiguration": {
+          "Status": "Suspended"
+        }
+      }
+    },
+	"s3duplokatkitzbuilderstoreSSLPolocy": {
+	  "Type" : "AWS::S3::BucketPolicy",
+	  "Properties" : {
+		  "Bucket" : {
+			  "Ref": "s3duplokatkitzbuilderstore"
+			},
+		  "PolicyDocument" : {
+			"Id": "ExamplePolicy",
+			"Version": "2012-10-17",
+			"Statement": [
+				{
+					"Sid": "AllowSSLRequestsOnly",
+					"Action": "s3:*",
+					"Effect": "Deny",
+					"Resource": [
+						{
+						  "Fn::Join": [
+							"",
+							[
+							  "arn:aws:s3:::",
+							  { "Ref": "s3duplokatkitzbuilderstore" }
+							]
+						  ]
+						},
+						{
+						  "Fn::Join": [
+							"",
+							[
+							  "arn:aws:s3:::",
+							  { "Ref": "s3duplokatkitzbuilderstore" },
+							  "/*"
+							]
+						  ]
+						}
+					],
+					"Condition": {
+						"Bool": {
+							 "aws:SecureTransport": "false"
+						}
+					},
+				   "Principal": "*"
+				}
+			]
+		}
+		}
+	},
+    "AWSS3BUCKET": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "AccessControl": "Private",
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "VersioningConfiguration": {
+          "Status": "Suspended"
+        }
+      }
+    },
+	"AWSS3BUCKETSSLPolocy": {
+	  "Type" : "AWS::S3::BucketPolicy",
+	  "Properties" : {
+		  "Bucket" : {
+			  "Ref": "AWSS3BUCKET"
+			},
+		  "PolicyDocument" : {
+			"Id": "ExamplePolicy",
+			"Version": "2012-10-17",
+			"Statement": [
+				{
+					"Sid": "AllowSSLRequestsOnly",
+					"Action": "s3:*",
+					"Effect": "Deny",
+					"Resource": [
+						{
+						  "Fn::Join": [
+							"",
+							[
+							  "arn:aws:s3:::",
+							  { "Ref": "AWSS3BUCKET" }
+							]
+						  ]
+						},
+						{
+						  "Fn::Join": [
+							"",
+							[
+							  "arn:aws:s3:::",
+							  { "Ref": "AWSS3BUCKET" },
+							  "/*"
+							]
+						  ]
+						}
+					],
+					"Condition": {
+						"Bool": {
+							 "aws:SecureTransport": "false"
+						}
+					},
+				   "Principal": "*"
+				}
+			]
+		}
+		}
+	},
+    "AWSS3KEYPAIRSBUCKET": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "AccessControl": "Private",
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "VersioningConfiguration": {
+          "Status": "Suspended"
+        }
+      }
+    },
+	"AWSS3KEYPAIRSBUCKETSSLPolocy": {
+	  "Type" : "AWS::S3::BucketPolicy",
+	  "Properties" : {
+		  "Bucket" : {
+			  "Ref": "AWSS3KEYPAIRSBUCKET"
+			},
+		  "PolicyDocument" : {
+			"Id": "ExamplePolicy",
+			"Version": "2012-10-17",
+			"Statement": [
+				{
+					"Sid": "AllowSSLRequestsOnly",
+					"Action": "s3:*",
+					"Effect": "Deny",
+					"Resource": [
+						{
+						  "Fn::Join": [
+							"",
+							[
+							  "arn:aws:s3:::",
+							  { "Ref": "AWSS3KEYPAIRSBUCKET" }
+							]
+						  ]
+						},
+						{
+						  "Fn::Join": [
+							"",
+							[
+							  "arn:aws:s3:::",
+							  { "Ref": "AWSS3KEYPAIRSBUCKET" },
+							  "/*"
+							]
+						  ]
+						}
+					],
+					"Condition": {
+						"Bool": {
+							 "aws:SecureTransport": "false"
+						}
+					},
+				   "Principal": "*"
+				}
+			]
+		}
+		}
+	},
+    "sgBastion": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Bastion server to get in",
+        "VpcId": { "Fn::ImportValue" : {"Fn::Sub": "${ParentVPCStack}-VPC" } },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "duploBastion"
+          }
+        ]
+      }
+    },
+    "AWSHOSTSG": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for all hosts",
+        "VpcId": { "Fn::ImportValue" : {"Fn::Sub": "${ParentVPCStack}-VPC" } },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "duploallhosts"
+          }
+        ]
+      }
+    },
+    "AWSELBSG": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "External Load balancers",
+        "VpcId": { "Fn::ImportValue" : {"Fn::Sub": "${ParentVPCStack}-VPC" } },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "duploExternalELB"
+          }
+        ]
+      }
+    },
+    "sgduploMaster": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security Group For Master",
+        "VpcId": { "Fn::ImportValue" : {"Fn::Sub": "${ParentVPCStack}-VPC" } },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "duploMaster"
+          }
+        ]
+      }
+    },
+    "ingress3": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "AWSHOSTSG"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": "0",
+        "ToPort": "65535",
+        "SourceSecurityGroupId": {
+          "Ref": "AWSELBSG"
+        }
+      }
+    },
+    "ingress4": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "AWSHOSTSG"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": "0",
+        "ToPort": "65535",
+        "SourceSecurityGroupId": {
+          "Ref": "sgduploMaster"
+        }
+      }
+    },
+    "ingress5": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "AWSHOSTSG"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": "22",
+        "ToPort": "22",
+        "SourceSecurityGroupId": {
+          "Ref": "sgBastion"
+        }
+      }
+    },
+    "ingress6": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "AWSHOSTSG"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": "3389",
+        "ToPort": "3389",
+        "SourceSecurityGroupId": {
+          "Ref": "sgBastion"
+        }
+      }
+    },
+    "ingress7": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "AWSELBSG"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": "80",
+        "ToPort": "80",
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "ingress8": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "AWSELBSG"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": "443",
+        "ToPort": "443",
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "ingress9": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "sgduploMaster"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": "0",
+        "ToPort": "65535",
+        "SourceSecurityGroupId": {
+          "Ref": "AWSELBSG"
+        },
+        "SourceSecurityGroupOwnerId": "061611700460"
+      }
+    },
+    "ingress10": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "sgduploMaster"
+        },
+        "IpProtocol": "-1",
+        "SourceSecurityGroupId": {
+          "Ref": "sgduploMaster"
+        },
+        "SourceSecurityGroupOwnerId": "061611700460"
+      }
+    },
+    "ingress11": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "sgduploMaster"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": "3389",
+        "ToPort": "3389",
+        "SourceSecurityGroupId": {
+          "Ref": "sgBastion"
+        },
+        "SourceSecurityGroupOwnerId": "061611700460"
+      }
+    },
+    "ingress12": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "sgBastion"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": "3389",
+        "ToPort": "3389",
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "egress1": {
+      "Type": "AWS::EC2::SecurityGroupEgress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "sgBastion"
+        },
+        "IpProtocol": "-1",
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "egress2": {
+      "Type": "AWS::EC2::SecurityGroupEgress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "AWSHOSTSG"
+        },
+        "IpProtocol": "-1",
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "egress3": {
+      "Type": "AWS::EC2::SecurityGroupEgress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "AWSELBSG"
+        },
+        "IpProtocol": "-1",
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "egress4": {
+      "Type": "AWS::EC2::SecurityGroupEgress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "sgduploMaster"
+        },
+        "IpProtocol": "-1",
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+	"AWSRDSSUBNETGROUP": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupDescription": "Default subnet group for RDS managed by duplo",
+        "SubnetIds": [{ "Fn::ImportValue" : {"Fn::Sub": "${ParentVPCStack}-SubnetAPrivate" } },{ "Fn::ImportValue" : {"Fn::Sub": "${ParentVPCStack}-SubnetBPrivate" } }]
+      }
+    },
+    "cachesubnetduplo": {
+      "Type": "AWS::ElastiCache::SubnetGroup",
+      "Properties": {
+        "Description": "Default subnet group for Ecache managed by duplo",
+        "SubnetIds": [{ "Fn::ImportValue" : {"Fn::Sub": "${ParentVPCStack}-SubnetAPrivate" } },{ "Fn::ImportValue" : {"Fn::Sub": "${ParentVPCStack}-SubnetBPrivate" } }]
+      }
+    },
+	"duplomasterrole": {
+	  "Type": "AWS::IAM::Role",
+	  "Properties": {
+		"AssumeRolePolicyDocument": {
+		   "Version" : "2012-10-17",
+		   "Statement": [ {
+			  "Effect": "Allow",
+			  "Principal": {
+				 "Service": [ "ec2.amazonaws.com" ]
+			  },
+			  "Action": [ "sts:AssumeRole" ]
+		   } ]
+		},
+		"Path": "/",
+		"Policies": [ {
+		   "PolicyName": "duplomaster",
+		   "PolicyDocument": {
+			  "Version" : "2012-10-17",
+			  "Statement": [ {
+				 "Effect": "Allow",
+				 "Action": "*",
+				 "Resource": "*"
+			  } ]
+		   }
+		   } ],
+		   "RoleName" : "duplomaster"
+		}
+	},
+	"DuploInstanceProfile": {
+	 "Type": "AWS::IAM::InstanceProfile",
+	 "Properties": {
+		"Path": "/",
+		"Roles": [ {
+		   "Ref": "duplomasterrole"
+		} ]
+	 }
+	},
+  "duploKmsKey" : {
+      "Type" : "AWS::KMS::Key",
+      "Properties" : {
+        "Description": "Duplo Master KMS Key",
+        "EnableKeyRotation": true,
+        "KeyPolicy" : {
+          "Version": "2012-10-17",
+          "Id": "key-default-1",
+          "Statement": [
+            {
+              "Sid": "Allow administration of the key",
+              "Effect": "Allow",
+              "Principal": { "AWS": { "Fn::GetAtt" : [ "duplomasterrole", "Arn" ] } },
+              "Action": [
+                "kms:Create*",
+                "kms:Describe*",
+                "kms:Enable*",
+                "kms:List*",
+                "kms:Put*",
+                "kms:Update*",
+                "kms:Revoke*",
+                "kms:Disable*",
+                "kms:Get*",
+                "kms:Delete*",
+                "kms:ScheduleKeyDeletion",
+                "kms:CancelKeyDeletion"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow use of the key",
+              "Effect": "Allow",
+              "Principal": { "AWS": { "Fn::GetAtt" : [ "duplomasterrole", "Arn" ] } },
+              "Action": [
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:DescribeKey"
+              ], 
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow administration of the key",
+              "Effect": "Allow",
+              "Principal": { "AWS": { "Fn::Sub": [ "arn:aws:sts::${AccountId}:root", { "AccountId": { "Ref" : "AWS::AccountId" }} ]} },
+              "Action": [
+                "kms:Create*",
+                "kms:Describe*",
+                "kms:Enable*",
+                "kms:List*",
+                "kms:Put*",
+                "kms:Update*",
+                "kms:Revoke*",
+                "kms:Disable*",
+                "kms:Get*",
+                "kms:Delete*",
+                "kms:ScheduleKeyDeletion",
+                "kms:CancelKeyDeletion"
+              ],
+              "Resource": "*"
+            }    
+          ]
+        }
+      }
+    },
+	"DuploMasterEC2Instance" : {
+     "Type" : "AWS::EC2::Instance",
+		 "Metadata" : {
+			"AWS::CloudFormation::Init" : {
+			  "config" : {
+				"files" : {
+				  "c:\\duplo-master-cf.config" : {
+					"content" : { "Fn::Join" : ["", [
+					  "{ \"AWSACCOUNTNAME\": \"", { "Ref" : "AWS::AccountId" },"\",", "\n",
+					  "\"AWSACCOUNTID\": \"", { "Ref" : "AWS::AccountId" }, "\",", "\n",
+					  "\"AWSS3BUCKETORGSUFFIX\": \"", "-", { "Ref" : "AWS::AccountId" }, "\",", "\n",
+					  "\"AWSVPCID\": \"", { "Fn::ImportValue" : {"Fn::Sub": "${ParentVPCStack}-VPC" } }, "\",", "\n",
+					  "\"AWSS3BUCKET\": \"", { "Ref" : "AWSS3BUCKET" }, "\",", "\n",
+            "\"AWSKATKITS3BUCKET\": \"", { "Ref" : "s3duplokatkitdb" }, "\",", "\n",
+					  "\"AWSS3KEYPAIRSBUCKET\": \"", { "Ref" : "AWSS3KEYPAIRSBUCKET" }, "\",", "\n",
+					  "\"AWSHOSTSG\": \"", { "Ref" : "AWSHOSTSG" }, "\",", "\n",
+					  "\"AWSELBSG\": \"", { "Ref" : "AWSELBSG" }, "\",", "\n",
+					  "\"AWSELBSUBNET\": \"", { "Fn::ImportValue" : {"Fn::Sub": "${ParentVPCStack}-SubnetAPublic" } },";",{ "Fn::ImportValue" : {"Fn::Sub": "${ParentVPCStack}-SubnetBPublic"} }, "\",", "\n",
+					  "\"AWSINTERNALELBSUBNET\": \"", { "Fn::ImportValue" : {"Fn::Sub": "${ParentVPCStack}-SubnetAPrivate" } },";",{ "Fn::ImportValue" : {"Fn::Sub": "${ParentVPCStack}-SubnetBPrivate"} }, "\",", "\n",
+					  "\"AWSELASTICACHESUBNETGROUP\": \"", { "Ref" : "cachesubnetduplo" }, "\",", "\n",
+					  "\"AWSRDSSUBNETGROUP\": \"", { "Ref" : "AWSRDSSUBNETGROUP" }, "\",", "\n",
+					  "\"DUPLOEXTDNSPRFX\": \"", { "Ref" : "DUPLOEXTDNSPRFX" }, "\",", "\n",
+					  "\"DUPLOINTDNSPRFX\": \"", { "Ref" : "DUPLOINTDNSPRFX" }, "\",", "\n",
+					  "\"AWSROUTE53DOMAINID\": \"", { "Ref" : "AWSROUTE53DOMAINID" }, "\",", "\n",
+					  "\"DOCKERREGISTRYCLIENTKEY\": \"", { "Ref" : "DOCKERREGISTRYCLIENTKEY" }, "\",", "\n",
+					  "\"ENGINEIAMROLE\": \"", { "Fn::GetAtt" : [ "duplomasterrole", "Arn" ] }, "\",", "\n",
+            "\"KMSKEYARN\": \"", { "Fn::GetAtt" : [ "duploKmsKey", "Arn" ] }, "\",", "\n",
+            "\"SETUPURL\": \"", { "Ref" : "SetupUrl" }, "\",", "\n",
+					  "\"CFRESOURCESSTACK\": \"", { "Ref" : "AWS::StackName" }, "\",", "\n",
+					  "\"CFNETWORKSTACK\": \"", { "Ref" : "ParentVPCStack" }, "\" }", "\n"
+					  ]]}
+				  }
+				}
+			  }
+			}
+		},
+    "Properties" : {
+      "ImageId" : { "Ref" : "MasterAmiId" },
+			"SubnetId": { "Fn::ImportValue" : {"Fn::Sub": "${ParentVPCStack}-SubnetBPrivate" } },
+			"SecurityGroupIds": [{"Ref": "sgduploMaster"}],
+			"InstanceType": "t2.medium",
+			"IamInstanceProfile": {"Ref": "DuploInstanceProfile"},
+			"Tags": [{ "Key" : "Name", "Value" : "Duplo-Master" }],
+			"KeyName": { "Ref" : "BASTIONPEMKEYNAME" },
+			"UserData" : { "Fn::Base64" : { "Fn::Join" : ["", [
+				"<script>\n",
+
+				"cfn-init.exe -v -s ", { "Ref" : "AWS::StackId" }, 
+				" -r DuploMasterEC2Instance",
+				" --region ", { "Ref" : "AWS::Region" }, "\n",
+
+				"</script>"
+			]]}}
+         }
+    },
+	"DuploBastionEC2Instance" : {
+         "Type" : "AWS::EC2::Instance",
+    "Properties": {
+      "ImageId": "ami-08af97ba1ea7f4944",
+      "SubnetId": { "Fn::ImportValue": { "Fn::Sub": "${ParentVPCStack}-SubnetBPublic" } },
+      "SecurityGroupIds": [ { "Ref": "sgBastion" } ],
+      "InstanceType": "t2.medium",
+      "Tags": [
+        {
+          "Key": "Name",
+          "Value": "Duplo-Windows-Bastion"
+        }
+      ],
+      "KeyName": { "Ref": "BASTIONPEMKEYNAME" }
+    }
+    },
+	"MasterELBDuplo" : {
+	  "Type" : "AWS::ElasticLoadBalancing::LoadBalancer",
+	  "Properties" : {
+	    "LoadBalancerName" : "MasterELBDuplo",
+		"Scheme" : "internal",
+		"Subnets" : [{ "Fn::ImportValue" : {"Fn::Sub": "${ParentVPCStack}-SubnetBPrivate" } }],
+		"SecurityGroups": [ { "Ref" : "AWSELBSG" } ],
+		"Instances" : [ { "Ref" : "DuploMasterEC2Instance" } ],
+		"Listeners" : [ {
+		  "LoadBalancerPort" : "80",
+		  "InstancePort" : "60030",
+		  "Protocol" : "HTTP"
+		} ],
+		"HealthCheck" : {
+		  "Target" : "TCP:60030",
+		  "HealthyThreshold" : "2",
+		  "UnhealthyThreshold" : "5",
+		  "Interval" : "15",
+		  "Timeout" : "5"
+		}
+	  }
+	},
+	"AuthELBDuplo" : {
+	  "Type" : "AWS::ElasticLoadBalancing::LoadBalancer",
+	  "Properties" : {
+	    "LoadBalancerName" : "AuthELBDuplo", 
+		"Subnets" : [{ "Fn::ImportValue" : {"Fn::Sub": "${ParentVPCStack}-SubnetBPublic" } }],
+		"SecurityGroups": [ { "Ref" : "AWSELBSG" } ],
+		"Instances" : [ { "Ref" : "DuploMasterEC2Instance" } ],
+		"Listeners" : [ {
+		  "LoadBalancerPort" : "443",
+		  "InstancePort" : "60020",
+		  "Protocol" : "TCP"
+		} ],
+		"HealthCheck" : {
+		  "Target" : "TCP:60020",
+		  "HealthyThreshold" : "2",
+		  "UnhealthyThreshold" : "5",
+		  "Interval" : "15",
+		  "Timeout" : "5"
+		}
+	  }
+	},
+  "KatkitELBDuplo" : {
+    "Type" : "AWS::ElasticLoadBalancing::LoadBalancer",
+    "Properties" : {
+      "LoadBalancerName" : "KatkitELBDuplo",
+    "Scheme" : "internal",
+    "Subnets" : [{ "Fn::ImportValue" : {"Fn::Sub": "${ParentVPCStack}-SubnetBPrivate" } }],
+    "SecurityGroups": [ { "Ref" : "AWSELBSG" } ],
+    "Instances" : [ { "Ref" : "DuploMasterEC2Instance" } ],
+    "Listeners" : [ {
+      "LoadBalancerPort" : "80",
+      "InstancePort" : "60010",
+      "Protocol" : "HTTP"
+    } ],
+    "HealthCheck" : {
+      "Target" : "TCP:60010",
+      "HealthyThreshold" : "2",
+      "UnhealthyThreshold" : "5",
+      "Interval" : "15",
+      "Timeout" : "5"
+    }
+    }
+  }
+  },
+  "Description": "DuploCloud"
+}
